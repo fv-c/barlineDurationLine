@@ -66,6 +66,71 @@
              (start-at-dot . ,(assoc-get 'start-at-dot left-details #f))))
          (ly:horizontal-line-spanner::calc-left-bound-info grob))))
 
+#(define (barline-duration-line-hook-stencil x y staff-space thick blot grob hook-dir)
+   (let* ((details (ly:grob-property grob 'details))
+          (hook-height
+           (assoc-get 'hook-height details (* staff-space 2/3)))
+          (hook-thick
+           (or (assoc-get 'hook-thickness details) thick))
+          (hook-X-ext
+           (cons (- x hook-thick) x))
+          (hook-Y-ext
+           (ordered-cons
+            (* hook-dir (+ hook-height thick))
+            0)))
+     (ly:round-filled-box
+      hook-X-ext
+      (coord-translate hook-Y-ext (* y staff-space))
+      blot)))
+
+#(define (barline-duration-line::print grob)
+   (let* ((vals (duration-line::calc grob))
+          (style (assoc-get 'style vals))
+          (left-start (assoc-get 'x-start vals))
+          (right-end (assoc-get 'x-end vals))
+          (left-Y (assoc-get 'y vals))
+          (staff-space (assoc-get 'staff-space vals))
+          (blot-diameter (assoc-get 'blot vals))
+          (thick (assoc-get 'thick vals))
+          (hook-stil (assoc-get 'hook vals))
+          (arrow-stil (assoc-get 'arrow vals))
+          (right-bound-info (ly:grob-property grob 'right-bound-info))
+          (right-end-style (assoc-get 'end-style right-bound-info #f))
+          (details (ly:grob-property grob 'details))
+          (hook-dir (assoc-get 'hook-direction details UP))
+          (opposite-hook-stil
+           (if (and (eq? style 'beam)
+                    (eq? right-end-style 'hook)
+                    (unbroken-or-last-broken-spanner? grob))
+               (barline-duration-line-hook-stencil
+                right-end
+                left-Y
+                staff-space
+                thick
+                blot-diameter
+                grob
+                (- hook-dir))
+               empty-stencil)))
+     (if (eq? style 'beam)
+         (ly:stencil-add
+          (ly:round-filled-box
+           (cons left-start right-end)
+           (coord-translate
+            (cons (/ thick -2) (/ thick 2))
+            (* left-Y staff-space))
+           blot-diameter)
+          hook-stil
+          opposite-hook-stil
+          arrow-stil)
+         (ly:stencil-add
+          (ly:line-interface::line
+           grob
+           left-start
+           (* left-Y staff-space)
+           right-end
+           (* left-Y staff-space))
+          arrow-stil))))
+
 #(define (Barline_duration_line_anchor_engraver context)
    (make-engraver
     (acknowledgers
@@ -242,6 +307,9 @@ barlineDurationLine =
     \override TextScript.staff-padding = #2.4
     \override DurationLine.arrow-length = #1.5
     \override DurationLine.arrow-width = #1
+    \override DurationLine.bound-details.right.end-style = #'hook
+    \override DurationLine.bound-details.right-broken.end-style = #'arrow
+    \override DurationLine.stencil = #barline-duration-line::print
     \override DurationLine.to-barline = ##t
   }
 }
